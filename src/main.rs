@@ -1,3 +1,11 @@
+#![warn(
+    // clippy::all,
+    // clippy::restriction,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo
+)]
+
 use crossterm::{
     cursor,
     terminal::{Clear, ClearType},
@@ -82,15 +90,14 @@ impl Args {
                 if let (Ok(ip_from), Ok(ip_to)) =
                     (IpAddr::from_str(&ip_from_arg), IpAddr::from_str(&ip_to_arg))
                 {
-                    return Ok(Args {
+                    return Ok(Self {
                         flag: None,
                         ip_range_from: ip_from,
                         ip_range_to: ip_to,
                         threads: 255,
                     });
-                } else {
-                    return Err("Not a valid IPADDR; must be IPv4 or IPv6");
                 }
+                return Err("Not a valid IPADDR; must be IPv4 or IPv6 !!");
             }
             5 => {
                 if args[1] == "-j" {
@@ -106,7 +113,7 @@ impl Args {
                         Ok(s) => s,
                         Err(_) => return Err("Not a valid IPADDR; must be IPv4 or IPv6"),
                     };
-                    return Ok(Args {
+                    return Ok(Self {
                         threads,
                         flag: Some(args[1].clone()),
                         ip_range_from: ip_from,
@@ -135,7 +142,7 @@ fn generate_ip_range(ip_start: IpAddr, ip_end: IpAddr) -> Vec<IpAddr> {
             let start_segments = start.segments();
             let end_segments = end.segments();
 
-            let mut current_segments = start_segments.clone();
+            let mut current_segments = start_segments;
 
             while current_segments <= end_segments {
                 ip_range.push(IpAddr::V6(current_segments.into()));
@@ -151,7 +158,7 @@ fn generate_ip_range(ip_start: IpAddr, ip_end: IpAddr) -> Vec<IpAddr> {
 }
 
 fn increment_ipv6_segments(segments: [u16; 8]) -> [u16; 8] {
-    let mut result = segments.clone();
+    let mut result = segments;
     let mut carry = 1;
 
     for i in (0..8).rev() {
@@ -163,16 +170,16 @@ fn increment_ipv6_segments(segments: [u16; 8]) -> [u16; 8] {
     result
 }
 
-fn scan_ports(ip: IpAddr, ports: Vec<u16>, tx: Sender<(IpAddr, u16)>) {
-    for port in &ports {
+fn scan_ports(ip: IpAddr, ports: &Vec<u16>, tx: Sender<(IpAddr, u16)>) {
+    for port in ports {
         let socket_addr = if port < &MAX_PORT {
             SocketAddr::new(ip, *port)
         } else {
-            println!("Skipped {}:{}, port too big", ip, port);
+            println!("Skipped {ip}:{port}, port too big");
             continue;
         };
         if let Ok(_) = TcpStream::connect_timeout(&socket_addr, Duration::from_millis(100)) {
-            tx.send((ip, *port)).unwrap()
+            tx.send((ip, *port)).unwrap();
         }
     }
 }
@@ -182,12 +189,10 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
     let arguments = Args::new(&args).unwrap_or_else(|err| {
-        if err.contains("help") {
-            process::exit(0);
-        } else {
-            eprintln!("{} problem parsing arguments: {}", program, err);
-            process::exit(0);
+        if !err.contains("help") {
+            eprintln!("{program} problem parsing arguments: {err}");
         }
+        process::exit(0);
     });
 
     let ip_start = arguments.ip_range_from;
@@ -201,23 +206,21 @@ fn main() {
         255
     };
     let common_ports = COMMON_PORTS.to_vec();
-    let chunk_size = ip_range.len() / num_threads as usize;
-    let mut remainder = ip_range.len() % num_threads as usize;
+    let chunk_size = ip_range.len() / num_threads;
+    let mut remainder = ip_range.len() % num_threads;
 
     let mut chunks: Vec<Vec<_>> = Vec::new();
     let mut start = 0;
 
     for _ in 0..num_threads {
-        let end = start + chunk_size + if remainder > 0 { 1 } else { 0 };
+        let end = start + chunk_size + usize::from(remainder > 0);
         chunks.push(ip_range[start..end].to_vec());
         start = end;
-        if remainder > 0 {
-            remainder -= 1;
-        }
+        remainder = remainder.saturating_sub(1);
     }
     let ip_range_arc = Arc::new(Mutex::new(chunks));
     let (tx, rx) = channel::<(IpAddr, u16)>();
-    let common_ports = common_ports.clone();
+    let common_ports = common_ports;
     let ip_range_arc = Arc::clone(&ip_range_arc);
     let mut threads = 0;
     while let Some(ip_chunk) = ip_range_arc.lock().unwrap().pop() {
@@ -227,25 +230,24 @@ fn main() {
         thread::spawn(move || {
             // println!("IP: {}", ip);
             let tx = tx.clone();
-            let common_ports = common_ports.clone();
             for ip in ip_chunk {
-                scan_ports(ip, common_ports.clone(), tx.clone());
+                scan_ports(ip, &common_ports, tx.clone());
             }
         });
         threads += 1;
     }
     drop(tx);
-    println!("Threads spawned {}\n\n", threads);
+    println!("Threads spawned {threads}\n\n");
     let mut ips: Vec<(IpAddr, u16)> = vec![];
     for (ip, port) in rx {
         clear_previous_lines(ips.len());
         ips.push((ip, port));
-        ips.sort_by(|a, b| a.cmp(b));
+        ips.sort();
         let ips_to_print = ips
             .iter()
-            .map(|(ip, port)| format!("{}:{} is open!\n", ip, port))
+            .map(|(ip, port)| format!("{ip}:{port} is open!\n"))
             .collect::<String>();
-        print!("{}", ips_to_print);
+        print!("{ips_to_print}");
     }
     let end_time = Instant::now();
     let elapsed_time = end_time - start_time;
