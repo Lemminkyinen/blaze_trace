@@ -1,5 +1,10 @@
 use std::net::IpAddr;
 
+use crossterm::{
+    cursor,
+    terminal::{Clear, ClearType},
+};
+
 const MAX_PORT: u16 = 65535;
 
 pub fn generate_ip_range(ip_start: IpAddr, ip_end: IpAddr) -> Vec<IpAddr> {
@@ -83,4 +88,13 @@ where
         remainder = remainder.saturating_sub(1);
     }
     chunks
+}
+
+pub fn clear_previous_lines(num_lines: usize) {
+    print!("{}", cursor::MoveUp(num_lines as u16));
+    for _ in 0..num_lines {
+        print!("{}", Clear(ClearType::CurrentLine));
+        print!("{}", cursor::MoveDown(1));
+    }
+    print!("{}", cursor::MoveUp(num_lines as u16));
 }

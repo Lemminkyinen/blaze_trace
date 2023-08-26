@@ -1,10 +1,6 @@
 // #![warn(clippy::pedantic, clippy::nursery, clippy::cargo)]
 mod utils;
 use clap::Parser;
-use crossterm::{
-    cursor,
-    terminal::{Clear, ClearType},
-};
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -46,14 +42,6 @@ const COMMON_PORTS: [u16; 30] = [
     27017, // MongoDB
 ];
 
-fn clear_previous_lines(num_lines: usize) {
-    print!("{}", cursor::MoveUp(num_lines as u16));
-    for _ in 0..num_lines {
-        print!("{}", Clear(ClearType::CurrentLine));
-        print!("{}", cursor::MoveDown(1));
-    }
-    print!("{}", cursor::MoveUp(num_lines as u16));
-}
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about=None)]
 struct Args {
@@ -107,7 +95,7 @@ async fn main() {
     println!("Threads spawned {}\n\n", num_threads);
     let mut ips: Vec<(IpAddr, u16)> = vec![];
     while let Some((ip, port)) = rx.recv().await {
-        clear_previous_lines(ips.len());
+        utils::clear_previous_lines(ips.len());
         ips.push((ip, port));
         ips.sort();
         let ips_to_print = ips
