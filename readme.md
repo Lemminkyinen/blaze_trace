@@ -1,3 +1,3 @@
 # Blace Trace
-### multithreaded mini command line ip sniffer
+### multithreaded mini command line port scanner
 # 
