@@ -53,7 +53,7 @@ fn increment_ipv6_segments(segments: [u16; 8]) -> [u16; 8] {
     result
 }
 
-pub fn create_ip_list_with_ports(ip_range: Vec<IpAddr>, ports: &[u16]) -> Vec<(IpAddr, u16)> {
+pub fn create_ip_list_with_ports(ip_range: Vec<IpAddr>, ports: Vec<u16>) -> Vec<(IpAddr, u16)> {
     ip_range
         .into_iter()
         .flat_map(|ip| {

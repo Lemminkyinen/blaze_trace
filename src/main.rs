@@ -85,9 +85,11 @@ async fn scan_chunk(ip_chunk: Vec<(IpAddr, u16)>, time_out: u64, tx: mpsc::Sende
 #[tokio::main]
 async fn main() {
     let start_time = Instant::now();
-    let arguments: Args = Args::parse();
+    let mut arguments: Args = Args::parse();
     let ip_range = utils::generate_ip_range(arguments.ip_range_from, arguments.ip_range_to);
-    let ips_with_ports = utils::create_ip_list_with_ports(ip_range.clone(), &COMMON_PORTS);
+    let mut ports = COMMON_PORTS.to_vec();
+    ports.append(&mut arguments.ports);
+    let ips_with_ports = utils::create_ip_list_with_ports(ip_range.clone(), ports);
     let num_threads = arguments.threads as usize;
     let chunks = utils::get_exact_chunks(ips_with_ports, num_threads);
     let ip_range_arc = Arc::new(Mutex::new(chunks));
